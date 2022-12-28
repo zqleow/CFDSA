@@ -1,0 +1,115 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cs-pvc
+  labels:
+    app: codeserver
+    name: cs-pvc
+  namespace: cs
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  storageClassName: do-block-storage-xfs
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cs-cm
+  labels:
+    app: codeserver
+    name: cs-cm
+  namespace: cs
+data:
+  PUID: "1000"
+  PGID: "1000"
+  TS: Asia/Singapore
+  DEFAULT_WORKSPACE: /config/workspace
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cs-deploy
+  labels:
+    name: cs-deploy
+    app: codeserver
+  namespace: cs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: codeserver
+      name: cs-po
+  template:
+    metadata:
+      name: cs-po
+      labels:
+        app: codeserver
+        name: cs-po
+    spec:
+      volumes:
+      - name: workspace-vol
+        persistentVolumeClaim:
+          claimName: cs-pvc
+      containers:
+      - name: cs-container
+        image: linuxserver/code-server:4.9.1
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - configMapRef:
+            name: cs-cm
+        ports:
+        - containerPort: 8443
+        volumeMounts:
+        - name: workspace-vol
+          mountPath: /config/workspace
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cs-svc
+  labels:
+    name: cs-svc
+    app: codeserver
+  namespace: cs
+spec:
+  type: ClusterIP
+  selector:
+    name: cs-po
+    app: codeserver
+  ports:
+  - port: 8443
+    targetPort: 8443
+
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cs-ing
+  labels:
+    name: cs-ing
+    app: codeserver
+  namespace: cs
+  annotations:
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/auth-url: "https://$host/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://$host/oauth2/start?rd=$escaped_request_uri"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: cs-163.47.9.253.nip.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cs-svc
+            port:
+              number: 8443
