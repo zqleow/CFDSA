@@ -1,0 +1,46 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-deploy
+  labels:
+    name: db-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: db-po
+  template:
+    metadata:
+      name: db-po
+      labels:
+        name: db-po
+    spec:
+      volumes:
+      - name: data-vol
+        persistentVolumeClaim:
+          claimName: db-pvc
+      containers:
+      - name: db-container
+        image: stackupiss/bgg-database:v1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: data-vol
+          mountPath: /var/lib/mysql
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-svc
+  labels:
+    name: db-svc
+spec:
+  type: ClusterIP
+  selector:
+    name: db-po
+  ports:
+  - port: 3306
+    targetPort: 3306
